@@ -41,8 +41,7 @@ def concat_weights(models):
       axis = 1
     else:
       axis = 0
-    lazy_tensors = [data.to(device='cpu') for data in disk_tensors]
-    first, rest = lazy_tensors[0], lazy_tensors[1:]
+    first, rest = disk_tensors[0], disk_tensors[1:]
     return first.cat(*rest, dim=axis)
   return {name: convert(name) for name in {name: None for model in models for name in model}}
 
