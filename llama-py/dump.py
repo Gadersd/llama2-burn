@@ -56,16 +56,17 @@ def save_transformer_block(transformer_block, path):
     save_rmsnorm(transformer_block.ffn_norm, pathlib.Path(path, 'ffn_norm'))
 
 def save_transformer(transformer, path):
-    pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-    save_scalar(len(transformer.layers), 'n_layer', path)
-    for idx, layer in enumerate(transformer.layers):
-        save_transformer_block(layer, pathlib.Path(path, f'layer{idx}'))
-    save_rmsnorm(transformer.norm, pathlib.Path(path, 'norm'))
-    save_embedding(transformer.tok_embeddings, pathlib.Path(path, 'tok_embeddings'))
-    save_linear(transformer.output, pathlib.Path(path, 'output'))
-    save_scalar(10000.0, 'theta', path)
-    save_scalar(transformer.params.max_seq_len, 'n_ctx', path)
-    save_scalar(transformer.params.multiple_of, 'multiple_of', path)
-    if transformer.params.ffn_dim_multiplier is not None:
-        save_scalar(transformer.params.ffn_dim_multiplier, 'ffn_dim_multiplier', path)
-    #save_tensor(transformer.freqs_cis, 'freqs_cis', path)
+    with torch.no_grad():
+        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+        save_scalar(len(transformer.layers), 'n_layer', path)
+        for idx, layer in enumerate(transformer.layers):
+            save_transformer_block(layer, pathlib.Path(path, f'layer{idx}'))
+        save_rmsnorm(transformer.norm, pathlib.Path(path, 'norm'))
+        save_embedding(transformer.tok_embeddings, pathlib.Path(path, 'tok_embeddings'))
+        save_linear(transformer.output, pathlib.Path(path, 'output'))
+        save_scalar(10000.0, 'theta', path)
+        save_scalar(transformer.params.max_seq_len, 'n_ctx', path)
+        save_scalar(transformer.params.multiple_of, 'multiple_of', path)
+        if transformer.params.ffn_dim_multiplier is not None:
+            save_scalar(transformer.params.ffn_dim_multiplier, 'ffn_dim_multiplier', path)
+        #save_tensor(transformer.freqs_cis, 'freqs_cis', path)
