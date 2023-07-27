@@ -60,6 +60,6 @@ if __name__ == "__main__":
           tokens = torch.tensor([0, 2, 1])
           out = llama(tokens.unsqueeze())
 
-          print(out[0, :3, :10])
+          print(out[0, :3, :10].numpy())
     except Exception as e:
         print(f"An error occurred: {e}")
