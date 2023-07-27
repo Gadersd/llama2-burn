@@ -55,11 +55,22 @@ if __name__ == "__main__":
 
     try:
         with torch.no_grad():
+          tok = tokenizer.Tokenizer(model_path=tokenizer_path)
           llama = load_model(model_dir, tokenizer_path)
 
-          tokens = torch.tensor([0, 2, 1])
+          '''tokens = torch.tensor([0, 2, 1])
           out = llama(tokens.unsqueeze(0), 0)
 
-          print(out[0, :3, :10].numpy())
+          print(out[0, :3, :10].numpy())'''
+
+          tokens = [1]
+          for i in range(0, 10):
+             token_tensor = torch.tensor(tokens)
+             logits = llama(token_tensor, 0)
+             sample = logits[:, -1, :].argmax(dim=-1)
+             print(f'Sample is {sample}')
+             tokens = tokens + [sample]
+        decoded = tok.decode(tokens)
+        print(f"Sampled output: {decoded}")
     except Exception as e:
         print(f"An error occurred: {e}")
