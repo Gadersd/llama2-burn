@@ -14,6 +14,36 @@ use burn::{
     },
 };
 
+fn sample_llama<B: Backend>(llama: &Llama<B>, tokenizer: &LlamaTokenizer, prompt: &str, n_tokens: usize) -> String {
+    let device = llama.devices()[0].clone();
+
+    let mut tokens = tokenizer.encode(prompt, true, false);
+    let mut text = String::new();
+
+    for i in 0..n_tokens {
+        let token_tensor = Tensor::from_ints(
+            Data::from_usize(Data::new(tokens.iter().map(|&t| t as usize).collect(), [tokens.len()].into()))
+        ).unsqueeze::<2>()
+         .to_device(&device);
+
+        let out = llama.forward(token_tensor);
+
+        let [n_batch, n_token, n_dict] = out.dims();
+        let last_row: Tensor<B, 1> = out.slice([0..1, (n_token - 1)..n_token]).flatten(0, 2);
+
+        let token_id = last_row.argmax(0).into_scalar().to_i64().unwrap();
+
+        tokens.push(token_id);
+
+        let token_text = tokenizer.decode(&[token_id], true);
+        println!("{token_text}");
+
+        text += &token_text;
+    }
+
+    text
+}
+
 fn test_tokenizer(tokenizer: &LlamaTokenizer) {
     println!("Vocab size: {}", tokenizer.vocab_size(false));
 
@@ -66,9 +96,10 @@ fn main() {
         }
     };
 
-    let tokens = Tensor::from_ints([0, 2, 1]);
-    let out = llama.forward(tokens.clone().unsqueeze());
+    let test_prompt = "Hello, I am ";
+    let sample = sample_llama(&llama, &tokenizer, test_prompt, 10);
 
-    println!("Tokens input: {:?}", tokens.into_data());
-    println!("Model output: {:?}", out.slice([0..1, 0..3, 0..10]).into_data());
+    println!("Prompt: {}", test_prompt);
+    println!("Sample: {}", sample);
+    println!("Combined: {}{}", test_prompt, sample);
 }
