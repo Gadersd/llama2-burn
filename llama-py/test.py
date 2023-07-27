@@ -63,12 +63,12 @@ if __name__ == "__main__":
 
           print(out[0, :3, :10].numpy())'''
 
-          tokens = [1]
+          tokens = tok.encode("Hello, I am ", True, False)
           for i in range(0, 10):
              token_tensor = torch.tensor(tokens)
              logits = llama(token_tensor.unsqueeze(0), 0)
              sample = logits[:, -1, :].argmax(dim=-1).item()
-             print(f'Sample is {sample}')
+             print(f'Sample is {sample} {tok.decode(sample)}')
              tokens = tokens + [sample]
         decoded = tok.decode(tokens)
         print(f"Sampled output: {decoded}")
