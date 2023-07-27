@@ -58,7 +58,7 @@ if __name__ == "__main__":
           llama = load_model(model_dir, tokenizer_path)
 
           tokens = torch.tensor([0, 2, 1])
-          out = llama(tokens.unsqueeze(0))
+          out = llama(tokens.unsqueeze(0), 0)
 
           print(out[0, :3, :10].numpy())
     except Exception as e:
