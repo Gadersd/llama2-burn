@@ -96,6 +96,8 @@ fn main() {
         burn_tch::TchDevice::Cuda(0)
     };
 
+    let device = burn_tch::TchDevice::Cpu;
+
     let args: Vec<String> = env::args().collect();
     if args.len() != 5 {
         eprintln!("Usage: {} <model_name> <tokenizer_filepath> <prompt> <n_tokens>", args[0]);
