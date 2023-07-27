@@ -66,7 +66,7 @@ if __name__ == "__main__":
           tokens = [1]
           for i in range(0, 10):
              token_tensor = torch.tensor(tokens)
-             logits = llama(token_tensor, 0)
+             logits = llama(token_tensor.unsqueeze(0), 0)
              sample = logits[:, -1, :].argmax(dim=-1)
              print(f'Sample is {sample}')
              tokens = tokens + [sample]
