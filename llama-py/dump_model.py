@@ -30,19 +30,17 @@ def load_model(model_dir, tokenizer_path):
     return model
 
 
+# The concat_weights function is adapted from the tinygrad library:  
+# https://github.com/tinygrad/tinygrad/blob/master/tinygrad/examples/llama.py
+# Original code by TinyGrad authors
+# Adapted by [Your Name]
 def concat_weights(models):
   def convert(name) -> torch.Tensor:
     disk_tensors = [model[name] for model in models]
-    if len(disk_tensors) == 1:
+    if len(disk_tensors) == 1 or len(disk_tensors[0].shape) == 1:
       return disk_tensors[0]
-    if len(disk_tensors[0].shape) == 1:
-      return disk_tensors[0]
-    if name.startswith('tok_embeddings.') or name.endswith('.attention.wo.weight') or name.endswith('.feed_forward.w2.weight'):
-      axis = 1
-    else:
-      axis = 0
-    first, rest = disk_tensors[0], disk_tensors[1:]
-    return first.cat(*rest, dim=axis)
+    axis = 1 if name.startswith('tok_embeddings.') or name.endswith('.attention.wo.weight') or name.endswith('.feed_forward.w2.weight') else 0
+    return disk_tensors[0].cat(*disk_tensors[1:], dim=axis)
   return {name: convert(name) for name in {name: None for model in models for name in model}}
 
 

@@ -1,3 +1,9 @@
+# This file is adapted from the LLama project:
+# https://github.com/facebookresearch/llama/blob/main/llama/tokenizer.py
+
+# Original LLama code by Facebook AI Research
+# Adapted by Gadersd
+
 from sentencepiece import SentencePieceProcessor
 from typing import List
 

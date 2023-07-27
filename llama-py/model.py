@@ -1,5 +1,8 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# This software may be used and distributed according to the terms of the Llama 2 Community License Agreement.
+# This file is adapted from the LLama project:
+# https://github.com/facebookresearch/llama/blob/main/llama/model.py
+
+# Original LLama code by Facebook AI Research 
+# Adapted by Gadersd
 
 import math
 from dataclasses import dataclass
