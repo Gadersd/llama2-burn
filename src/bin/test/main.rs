@@ -1,6 +1,8 @@
 use llama::model::*;
 use llama::token::LlamaTokenizer;
 
+use num_traits::cast::ToPrimitive;
+
 use burn::{
     config::Config, 
     module::Module, 
