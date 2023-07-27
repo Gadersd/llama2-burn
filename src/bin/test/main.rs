@@ -70,5 +70,5 @@ fn main() {
     let out = llama.forward(tokens.clone().unsqueeze());
 
     println!("Tokens input: {:?}", tokens.into_data());
-    println!("Model output: {:?}", out.into_data());
+    println!("Model output: {:?}", out.slice(0..1, 0..3, 0..10).into_data());
 }
