@@ -240,17 +240,20 @@ fn qkv_attention_rotary<B: Backend>(q: Tensor<B, 3>, k: Tensor<B, 3>, v: Tensor<
     let [_, n_ctx, _] = k.dims();
 
     let n_hstate = n_state / n_head;
-    let scale = (n_hstate as f64).powf(-0.25);
+    let scale = (n_hstate as f64).powf(-0.25); // keeps the value weightings roughly normally distributed
 
-    let n_repeat = n_head / n_kv_head;
     let q = q.reshape([n_batch, n_qctx, n_head, n_hstate]);
+    // interleave kv heads to match the number of q heads
+    let n_repeat = n_head / n_kv_head;
     let k = repeat_kv(k.reshape([n_batch, n_ctx, n_kv_head, n_hstate]), n_repeat);
     let v = repeat_kv(v.reshape([n_batch, n_ctx, n_kv_head, n_hstate]), n_repeat);
 
+    // the last two dims need to be (n_ctx, n_hstate)
     let q = rotary_encoder.forward(q.swap_dims(1, 2)) * scale;
     let k = rotary_encoder.forward(k.swap_dims(1, 2)) * scale;
     let v = v.swap_dims(1, 2);
 
+    // compute value weightings
     let qk = q.matmul(k.transpose());
 
     // apply mask
@@ -267,6 +270,8 @@ fn qkv_attention_rotary<B: Backend>(q: Tensor<B, 3>, k: Tensor<B, 3>, v: Tensor<
     return o;
 }
 
+/// For a tensor of size (n_batch, n_ctx, n_kv_head, n_hstate), repeats the head keys or values in an interleaving manner so that the number
+/// of heads is effectively multiplied by n_repeat
 fn repeat_kv<B: Backend>(x: Tensor<B, 4>, n_repeat: usize) -> Tensor<B, 4> {
     if n_repeat > 1 {
         let [n_batch, n_ctx, n_kv_head, n_hstate] = x.dims();
@@ -276,6 +281,8 @@ fn repeat_kv<B: Backend>(x: Tensor<B, 4>, n_repeat: usize) -> Tensor<B, 4> {
     }
 }
 
+/// Generates a strictly upper triangular matrix filled with -inf that when added to an attention weight matrix prevents 
+/// vectors from attending to other vectors further in the sequence, preventing future information from flowing into the past
 pub fn attn_decoder_mask<B: Backend>(seq_length: usize) -> Tensor<B, 2> {
     let mut mask = Tensor::<B, 2>::zeros([seq_length, seq_length]);
 
@@ -327,6 +334,10 @@ impl RotaryEncodingConfig {
     }
 }
 
+/// Conceptually, pairs the values of a vector (v0 v1 v2 ... vn) into complex numbers (c0 c1 c2 ... cn/2) 
+/// which are then rotated counter-clockwise by the angle seq_index / theta^(2*pair_index/n).
+/// This encodes sequence positions in a way that is agnostic to the maximum sequence length
+/// which potentially allows for arbitrarily long sequences without retraining.
 #[derive(Module, Debug)]
 pub struct RotaryEncoding<B: Backend> {
     arange_m: Param<Tensor<B, 2>>, 
@@ -334,6 +345,7 @@ pub struct RotaryEncoding<B: Backend> {
 }
 
 impl<B: Backend> RotaryEncoding<B> {
+    /// Applies rotary positional encoding to a tensor of dimenions (..., seq_len, n_state)
     fn forward<const D: usize>(&self, x: Tensor<B, D>) -> Tensor<B, D> {
         assert!(D >= 2);
         let orig_shape = x.shape();
