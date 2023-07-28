@@ -19,7 +19,7 @@ use burn::{
     },
 };
 
-use burn::record::{self, Recorder, DefaultRecorder};
+use burn::record::{self, Recorder, BinFileRecorder, HalfPrecisionSettings};
 
 fn convert_llama_dump_to_model<B: Backend>(dump_path: &str, model_name: &str) -> Result<(), Box<dyn Error>> {
     let (llama, llama_config): (Llama::<B>, LlamaConfig) = load_llama_dump(dump_path)?;
@@ -31,7 +31,7 @@ fn convert_llama_dump_to_model<B: Backend>(dump_path: &str, model_name: &str) ->
 }
 
 fn save_llama_model_file<B: Backend>(llama: Llama<B>, name: &str) -> Result<(), record::RecorderError> {
-    DefaultRecorder::new()
+    BinFileRecorder::<HalfPrecisionSettings>::new()
     .record(
         llama.into_record(),
         name.into(),
