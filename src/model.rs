@@ -413,8 +413,6 @@ fn numpy_to_tensor<B: Backend, const D: usize>(numpy_data: NpyData<f32>) -> Tens
 fn load_tensor<B: Backend, const D: usize>(name: &str, path: &str) -> Result<Tensor<B, D>, Box<dyn Error>> {
     let tensor_path = format!("{}/{}.npy", path, name);
 
-    println!("{}", tensor_path);
-
     let mut buf = vec![];
     std::fs::File::open(tensor_path)?
         .read_to_end(&mut buf)?;
@@ -422,6 +420,8 @@ fn load_tensor<B: Backend, const D: usize>(name: &str, path: &str) -> Result<Ten
     let tensor_numpy: NpyData<f32> = NpyData::from_bytes(&buf)?;
 
     let tensor = numpy_to_tensor(tensor_numpy);
+
+    println!("{}", tensor_path);
 
     Ok(tensor)
 }
