@@ -426,7 +426,7 @@ fn load_tensor<B: Backend, const D: usize>(name: &str, path: &str) -> Result<Ten
     let tensor_path = format!("{}/{}.npy", path, name);
 
     let mut buf = vec![];
-    std::fs::File::open(tensor_path)?
+    std::fs::File::open(&tensor_path)?
         .read_to_end(&mut buf)?;
 
     let tensor_numpy: NpyData<f32> = NpyData::from_bytes(&buf)?;
