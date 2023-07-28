@@ -82,12 +82,6 @@ impl<B: Backend> Llama<B> {
 
         let x = self.token_embedding.forward(x);
 
-        //println!("{:?}", x.clone().into_data());
-
-        //println!("{:?}", self.blocks[0].forward(x.clone(), &self.rotary_encoder, self.mask.val()).into_data());
-
-        //let mask = attn_decoder_mask(seq_len);
-
         let mut x = x;
         for block in &self.blocks {
             x = block.forward(x, &self.rotary_encoder, self.mask.val());
@@ -136,12 +130,8 @@ pub struct ResidualDecoderAttentionBlock<B: Backend> {
 
 impl<B: Backend> ResidualDecoderAttentionBlock<B> {
     fn forward(&self, x: Tensor<B, 3>, rotary_encoder: &RotaryEncoding<B>, mask: Tensor<B, 2>) -> Tensor<B, 3> {
-        //println!("{:?}", self.attn.forward(self.attn_norm.forward(x.clone()), rotary_encoder, Some(mask.clone())).into_data());
-        //println!("Da da da");
         let x = x.clone() + self.attn.forward(self.attn_norm.forward(x), rotary_encoder, Some(mask));
-        //println!("{:?}", self.mlp_norm.forward(x.clone()).into_data());
         let x = x.clone() + self.mlp.forward(self.mlp_norm.forward(x));
-        //println!("{:?}", x.clone().into_data());
         return x;
     }
 }
@@ -252,8 +242,6 @@ fn qkv_attention_rotary<B: Backend>(q: Tensor<B, 3>, k: Tensor<B, 3>, v: Tensor<
     let n_hstate = n_state / n_head;
     let scale = (n_hstate as f64).powf(-0.25);
 
-    //println!("{:?}", rotary_encoder.forward(q.clone().reshape([n_batch, n_qctx, n_head, n_hstate]).swap_dims(1, 2)).swap_dims(1, 2).into_data());
-
     let n_repeat = n_head / n_kv_head;
     let q = q.reshape([n_batch, n_qctx, n_head, n_hstate]);
     let k = repeat_kv(k.reshape([n_batch, n_ctx, n_kv_head, n_hstate]), n_repeat);
@@ -348,7 +336,6 @@ pub struct RotaryEncoding<B: Backend> {
 impl<B: Backend> RotaryEncoding<B> {
     fn forward<const D: usize>(&self, x: Tensor<B, D>) -> Tensor<B, D> {
         assert!(D >= 2);
-        //let [n_batch, n_ctx, n_head, n_state] = x.dims();
         let orig_shape = x.shape();
         let (n_ctx, n_state) = (orig_shape.dims[D - 2], orig_shape.dims[D - 1]);
         let dummy_dim_size = orig_shape.num_elements() / (n_ctx * n_state);
