@@ -4,6 +4,8 @@ use llama::token::LlamaTokenizer;
 use num_traits::cast::ToPrimitive;
 use std::error::Error;
 
+use burn_wgpu::{WgpuBackend, WgpuDevice, AutoGraphicsApi};
+
 use burn::{
     config::Config, 
     module::Module, 
@@ -89,14 +91,8 @@ use std::io;
 use std::process;
 
 fn main() {
-    type Backend = burn_tch::TchBackend<Elem>;
-    let device = if cfg!(target_os = "macos") {
-        burn_tch::TchDevice::Mps
-    } else {
-        burn_tch::TchDevice::Cuda(0)
-    };
-
-    let device = burn_tch::TchDevice::Cpu;
+    type Backend = WgpuBackend<AutoGraphicsApi, Elem, i32>;
+    let device = WgpuDevice::BestAvailable;
 
     let args: Vec<String> = env::args().collect();
     if args.len() != 5 {

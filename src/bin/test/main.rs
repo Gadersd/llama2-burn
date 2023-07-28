@@ -3,6 +3,8 @@ use llama::token::LlamaTokenizer;
 
 use num_traits::cast::ToPrimitive;
 
+use burn_wgpu::{WgpuBackend, WgpuDevice, AutoGraphicsApi};
+
 use burn::{
     config::Config, 
     module::Module, 
@@ -68,8 +70,8 @@ use std::io;
 use std::process;
 
 fn main() {
-    let device = burn_tch::TchDevice::Cpu;
-    type Backend = burn_tch::TchBackend<Elem>;
+    type Backend = WgpuBackend<AutoGraphicsApi, Elem, i32>;
+    let device = WgpuDevice::BestAvailable;
 
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
