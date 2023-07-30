@@ -83,11 +83,10 @@ use std::process;
 
 fn main() {
     type Backend = WgpuBackend<AutoGraphicsApi, Elem, i32>;
-    let device = WgpuDevice::BestAvailable;
 
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 5 {
-        eprintln!("Usage: {} <model_name> <tokenizer_filepath> <prompt> <n_tokens>", args[0]);
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 6 {
+        eprintln!("Usage: {} <model_name> <tokenizer_filepath> <prompt> <n_tokens> <device>", args[0]);
         process::exit(1);
     }
 
@@ -98,6 +97,17 @@ fn main() {
         eprintln!("Error: Invalid number of tokens");
         process::exit(1);
     });
+
+    // Specify device based on command line argument
+    let device_param = &args[5];
+    let device = if device_param == "cpu" {
+        WgpuDevice::Cpu
+    } else if device_param == "best" {
+        WgpuDevice::BestAvailable
+    } else {
+        eprintln!("Error: Invalid device parameter (must be 'cpu' or 'best')");
+        process::exit(1);
+    };
 
     let tokenizer = match LlamaTokenizer::new(tokenizer_filepath) {
         Ok(tokenizer) => tokenizer,
