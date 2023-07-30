@@ -11,6 +11,7 @@ use burn::{
         Tensor,
         Distribution, 
         Int, 
+        Data, 
     },
 };
 
@@ -416,10 +417,15 @@ use std::io::Read;
 use npy::{self, NpyData};
 use num_traits::cast::ToPrimitive;
 
+use burn::tensor::ElementConversion;
+
 fn numpy_to_tensor<B: Backend, const D: usize>(numpy_data: NpyData<f32>, device: &B::Device) -> Tensor<B, D> {
-    let v = numpy_data.to_vec();
+    let mut v = numpy_data.to_vec();
+
     let shape: Vec<_> = v[0..D].into_iter().map(|&v| v as usize).collect();
-    Tensor::from_floats(&v[D..]).reshape(shape).to_device(device)
+    let data: Vec<B::FloatElem> = v[D..].into_iter().map(|e| e.elem()).collect();
+    
+    Tensor::from_data_device(Data::new(data, shape.into()), device)
 }
 
 fn load_tensor<B: Backend, const D: usize>(name: &str, path: &str, device: &B::Device) -> Result<Tensor<B, D>, Box<dyn Error>> {
