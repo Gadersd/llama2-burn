@@ -34,15 +34,6 @@ fn load_llama_model_file<B: Backend>(config: &LlamaConfig, filename: &str) -> Re
     .map(|record| config.init().load_record(record))
 }
 
-fn convert_llama_dump_to_model<B: Backend>(dump_path: &str, model_name: &str) -> Result<(), Box<dyn Error>> {
-    let (llama, llama_config): (Llama::<B>, LlamaConfig) = load_llama_dump(dump_path)?;
-
-    save_llama_model_file(llama, model_name)?;
-    llama_config.save(&format!("{model_name}.cfg"))?;
-
-    Ok( () )
-}
-
 fn save_llama_model_file<B: Backend>(llama: Llama<B>, name: &str) -> Result<(), record::RecorderError> {
     BinFileRecorder::<HalfPrecisionSettings>::new()
     .record(

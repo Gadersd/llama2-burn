@@ -71,7 +71,11 @@ use std::process;
 
 fn main() {
     type Backend = WgpuBackend<AutoGraphicsApi, Elem, i32>;
-    let device = WgpuDevice::BestAvailable;
+
+     // CPU is used for conversion
+     // everyone who converts should be able to perform a simple test without needing a lot of GPU memory
+    // so test on CPU
+     let device = WgpuDevice::Cpu;
 
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
@@ -92,7 +96,7 @@ fn main() {
 
     test_tokenizer(&tokenizer);
 
-    let (llama, llama_config): (Llama::<Backend>, LlamaConfig) = match load_llama_dump(dump_path) {
+    let (llama, llama_config): (Llama::<Backend>, LlamaConfig) = match load_llama_dump(dump_path, &device) {
         Ok((llama, llama_config)) => (llama, llama_config),
         Err(e) => {
             eprintln!("Failed to load llama dump: {:?}", e);

@@ -4,7 +4,7 @@ use llama::token::LlamaTokenizer;
 use num_traits::cast::ToPrimitive;
 use std::error::Error;
 
-use burn_wgpu::{WgpuBackend, AutoGraphicsApi};
+use burn_wgpu::{WgpuBackend, AutoGraphicsApi, WgpuDevice};
 
 use burn::{
     config::Config, 
@@ -21,8 +21,8 @@ use burn::{
 
 use burn::record::{self, Recorder, BinFileRecorder, HalfPrecisionSettings};
 
-fn convert_llama_dump_to_model<B: Backend>(dump_path: &str, model_name: &str) -> Result<(), Box<dyn Error>> {
-    let (llama, llama_config): (Llama::<B>, LlamaConfig) = load_llama_dump(dump_path)?;
+fn convert_llama_dump_to_model<B: Backend>(dump_path: &str, model_name: &str, device: &B::Device) -> Result<(), Box<dyn Error>> {
+    let (llama, llama_config): (Llama::<B>, LlamaConfig) = load_llama_dump(dump_path, device)?;
 
     save_llama_model_file(llama, model_name)?;
     llama_config.save(&format!("{model_name}.cfg"))?;
@@ -58,6 +58,9 @@ use std::process;
 fn main() {
     type Backend = WgpuBackend<AutoGraphicsApi, f32, i32>;
 
+    // might crash if lacking enough GPU memory so use CPU for conversion
+    let device = WgpuDevice::Cpu;
+
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {
         eprintln!("Usage: {} <dump_path> <model_name>", args[0]);
@@ -67,7 +70,7 @@ fn main() {
     let dump_path = &args[1];
     let model_name = &args[2];
 
-    if let Err(e) = convert_llama_dump_to_model::<Backend>(dump_path, model_name) {
+    if let Err(e) = convert_llama_dump_to_model::<Backend>(dump_path, model_name, &device) {
         eprintln!("Failed to convert llama dump to model: {:?}", e);
         process::exit(1);
     }

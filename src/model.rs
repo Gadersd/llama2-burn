@@ -416,13 +416,13 @@ use std::io::Read;
 use npy::{self, NpyData};
 use num_traits::cast::ToPrimitive;
 
-fn numpy_to_tensor<B: Backend, const D: usize>(numpy_data: NpyData<f32>) -> Tensor<B, D> {
+fn numpy_to_tensor<B: Backend, const D: usize>(numpy_data: NpyData<f32>, device: &B::Device) -> Tensor<B, D> {
     let v = numpy_data.to_vec();
     let shape: Vec<_> = v[0..D].into_iter().map(|&v| v as usize).collect();
-    Tensor::from_floats(&v[D..]).reshape(shape)
+    Tensor::from_floats(&v[D..]).reshape(shape).to_device(device)
 }
 
-fn load_tensor<B: Backend, const D: usize>(name: &str, path: &str) -> Result<Tensor<B, D>, Box<dyn Error>> {
+fn load_tensor<B: Backend, const D: usize>(name: &str, path: &str, device: &B::Device) -> Result<Tensor<B, D>, Box<dyn Error>> {
     let tensor_path = format!("{}/{}.npy", path, name);
 
     let mut buf = vec![];
@@ -431,24 +431,24 @@ fn load_tensor<B: Backend, const D: usize>(name: &str, path: &str) -> Result<Ten
 
     let tensor_numpy: NpyData<f32> = NpyData::from_bytes(&buf)?;
 
-    let tensor = numpy_to_tensor(tensor_numpy);
+    let tensor = numpy_to_tensor(tensor_numpy, device);
 
     println!("{}", tensor_path);
 
     Ok(tensor)
 }
 
-fn load_f32<B: Backend>(name: &str, path: &str) -> Result<f32, Box<dyn Error>> {
-    load_tensor::<B, 1>(name, path).map(|t| t.into_scalar().to_f32().unwrap())
+fn load_f32<B: Backend>(name: &str, path: &str, device: &B::Device) -> Result<f32, Box<dyn Error>> {
+    load_tensor::<B, 1>(name, path, device).map(|t| t.into_scalar().to_f32().unwrap())
 }
 
-fn load_usize<B: Backend>(name: &str, path: &str) -> Result<usize, Box<dyn Error>> {
-    load_tensor::<B, 1>(name, path).map(|t| t.into_scalar().to_usize().unwrap())
+fn load_usize<B: Backend>(name: &str, path: &str, device: &B::Device) -> Result<usize, Box<dyn Error>> {
+    load_tensor::<B, 1>(name, path, device).map(|t| t.into_scalar().to_usize().unwrap())
 }
 
-fn load_linear<B: Backend>(path: &str) -> Result<nn::Linear<B>, Box<dyn Error>> {
-    let weight = load_tensor::<B, 2>("weight", path)?;
-    let bias = load_tensor::<B, 1>("bias", path).ok();
+fn load_linear<B: Backend>(path: &str, device: &B::Device) -> Result<nn::Linear<B>, Box<dyn Error>> {
+    let weight = load_tensor::<B, 2>("weight", path, device)?;
+    let bias = load_tensor::<B, 1>("bias", path, device).ok();
 
     let record = nn::LinearRecord {
         weight: weight.into(),
@@ -460,9 +460,9 @@ fn load_linear<B: Backend>(path: &str) -> Result<nn::Linear<B>, Box<dyn Error>> 
 }
 
 
-fn load_rmsnorm<B: Backend>(path: &str) -> Result<RMSNorm<B>, Box<dyn Error>> {
-    let weight = load_tensor::<B, 1>("weight", path)?;
-    let eps = load_f32::<B>("eps", path)?.into();
+fn load_rmsnorm<B: Backend>(path: &str, device: &B::Device) -> Result<RMSNorm<B>, Box<dyn Error>> {
+    let weight = load_tensor::<B, 1>("weight", path, device)?;
+    let eps = load_f32::<B>("eps", path, device)?.into();
 
     let rmsnorm =  RMSNorm { 
         weight: weight.into(), 
@@ -473,14 +473,14 @@ fn load_rmsnorm<B: Backend>(path: &str) -> Result<RMSNorm<B>, Box<dyn Error>> {
 }
 
 
-fn load_attention<B: Backend>(path: &str) -> Result<MultiHeadSelfAttention<B>, Box<dyn Error>> {
-    let query = load_linear(&format!("{}/{}", path, "wq"))?;
-    let key = load_linear(&format!("{}/{}", path, "wk"))?;
-    let value = load_linear(&format!("{}/{}", path, "wv"))?;
-    let out = load_linear(&format!("{}/{}", path, "wo"))?;
+fn load_attention<B: Backend>(path: &str, device: &B::Device) -> Result<MultiHeadSelfAttention<B>, Box<dyn Error>> {
+    let query = load_linear(&format!("{}/{}", path, "wq"), device)?;
+    let key = load_linear(&format!("{}/{}", path, "wk"), device)?;
+    let value = load_linear(&format!("{}/{}", path, "wv"), device)?;
+    let out = load_linear(&format!("{}/{}", path, "wo"), device)?;
     
-    let n_head = load_usize::<B>("n_head", path)?;
-    let n_kv_head = load_usize::<B>("n_kv_head", path)?;
+    let n_head = load_usize::<B>("n_head", path, device)?;
+    let n_kv_head = load_usize::<B>("n_kv_head", path, device)?;
     
     let attention = MultiHeadSelfAttention {
         n_head: n_head,
@@ -494,10 +494,10 @@ fn load_attention<B: Backend>(path: &str) -> Result<MultiHeadSelfAttention<B>, B
     Ok(attention)
 }
 
-fn load_feedforward<B: Backend>(path: &str) -> Result<MLP<B>, Box<dyn Error>> {
-    let w1 = load_linear(&format!("{}/{}", path, "w1"))?;
-    let w2 = load_linear(&format!("{}/{}", path, "w2"))?;
-    let w3 = load_linear(&format!("{}/{}", path, "w3"))?;
+fn load_feedforward<B: Backend>(path: &str, device: &B::Device) -> Result<MLP<B>, Box<dyn Error>> {
+    let w1 = load_linear(&format!("{}/{}", path, "w1"), device)?;
+    let w2 = load_linear(&format!("{}/{}", path, "w2"), device)?;
+    let w3 = load_linear(&format!("{}/{}", path, "w3"), device)?;
 
     let mlp = MLP {
         w1: w1,
@@ -510,11 +510,11 @@ fn load_feedforward<B: Backend>(path: &str) -> Result<MLP<B>, Box<dyn Error>> {
 }
 
 
-fn load_transformer_block<B: Backend>(path: &str) -> Result<ResidualDecoderAttentionBlock<B>, Box<dyn Error>> {
-    let attn = load_attention(&format!("{}/{}", path, "attention"))?;
-    let attn_norm = load_rmsnorm(&format!("{}/{}", path, "attention_norm"))?;
-    let mlp = load_feedforward(&format!("{}/{}", path, "feedforward"))?;
-    let mlp_norm = load_rmsnorm(&format!("{}/{}", path, "ffn_norm"))?;
+fn load_transformer_block<B: Backend>(path: &str, device: &B::Device) -> Result<ResidualDecoderAttentionBlock<B>, Box<dyn Error>> {
+    let attn = load_attention(&format!("{}/{}", path, "attention"), device)?;
+    let attn_norm = load_rmsnorm(&format!("{}/{}", path, "attention_norm"), device)?;
+    let mlp = load_feedforward(&format!("{}/{}", path, "feedforward"), device)?;
+    let mlp_norm = load_rmsnorm(&format!("{}/{}", path, "ffn_norm"), device)?;
 
     let block = ResidualDecoderAttentionBlock {
         attn: attn,
@@ -528,20 +528,20 @@ fn load_transformer_block<B: Backend>(path: &str) -> Result<ResidualDecoderAtten
 
 use burn::nn::{EmbeddingRecord, EmbeddingConfig};
 
-pub fn load_llama_dump<B: Backend>(path: &str) -> Result<(Llama<B>, LlamaConfig), Box<dyn Error>> {
+pub fn load_llama_dump<B: Backend>(path: &str, device: &B::Device) -> Result<(Llama<B>, LlamaConfig), Box<dyn Error>> {
     let mut blocks: Vec<ResidualDecoderAttentionBlock<B>> = vec![];
-    let n_layer = load_usize::<B>("n_layer", path)?;
+    let n_layer = load_usize::<B>("n_layer", path, device)?;
     for i in 0..n_layer {
-        let block = load_transformer_block(&format!("{}/layer{}", path, i))?;
+        let block = load_transformer_block(&format!("{}/layer{}", path, i), device)?;
         blocks.push(block);
     }
 
-    let n_ctx = load_usize::<B>("n_ctx", path)?;
-    let theta = load_f32::<B>("theta", path)?;
-    let multiple_of = load_usize::<B>("multiple_of", path)?;
-    let ffn_dim_multiplier = load_usize::<B>("ffn_dim_multiplier", path).ok();
+    let n_ctx = load_usize::<B>("n_ctx", path, device)?;
+    let theta = load_f32::<B>("theta", path, device)?;
+    let multiple_of = load_usize::<B>("multiple_of", path, device)?;
+    let ffn_dim_multiplier = load_usize::<B>("ffn_dim_multiplier", path, device).ok();
     
-    let token_embedding = load_tensor("tok_embeddings/weight", path)?;
+    let token_embedding = load_tensor("tok_embeddings/weight", path, device)?;
     let [n_vocab, n_state] = token_embedding.dims();
     let n_head = blocks[0].attn.n_head;
     let n_kv_head = blocks[0].attn.n_kv_head;
@@ -550,8 +550,8 @@ pub fn load_llama_dump<B: Backend>(path: &str) -> Result<(Llama<B>, LlamaConfig)
     let token_embedding = EmbeddingConfig::new(n_vocab, n_state).init_with( EmbeddingRecord { weight: token_embedding.into() } );
     let rotary_encoding = RotaryEncodingConfig::new(n_ctx, head_dim, theta.into()).init();
 
-    let norm = load_rmsnorm(&format!("{}/{}", path, "norm"))?;
-    let output = load_linear(&format!("{}/{}", path, "output"))?;
+    let norm = load_rmsnorm(&format!("{}/{}", path, "norm"), device)?;
+    let output = load_linear(&format!("{}/{}", path, "output"), device)?;
     let mask = attn_decoder_mask(n_ctx).into();
 
     let norm_eps = norm.eps;
