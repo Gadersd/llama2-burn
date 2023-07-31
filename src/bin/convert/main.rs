@@ -4,7 +4,7 @@ use llama::token::LlamaTokenizer;
 use num_traits::cast::ToPrimitive;
 use std::error::Error;
 
-use burn_wgpu::{WgpuBackend, AutoGraphicsApi, WgpuDevice};
+use burn_tch::{TchBackend, TchDevice};
 
 use burn::{
     config::Config, 
@@ -56,10 +56,10 @@ use std::io;
 use std::process;
 
 fn main() {
-    type Backend = WgpuBackend<AutoGraphicsApi, f32, i32>;
+    type Backend = TchBackend<f32>;
 
     // might crash if lacking enough GPU memory so use CPU for conversion
-    let device = WgpuDevice::Cpu;
+    let device = TchDevice::Cpu;
 
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {

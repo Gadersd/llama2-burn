@@ -82,11 +82,14 @@ cargo run --bin test <tokenizer_filepath> <dump_path>
 ```
 Example: `cargo run --release --bin test tokenizer.model params`
 
-3. **Sampling Text**: The `sample` binary loads the converted burn model file and generates a sample output based on an input prompt. The model can run on either the cpu with "cpu" or gpu if available by using "best." Execute this using the following command: 
+3. **Sampling Text**: The `sample` binary loads the converted burn model file and generates a sample output based on an input prompt. The model can run on either the cpu or gpu. Execute this using the following command: 
 ```
 cargo run --bin sample <model_name> <tokenizer_filepath> <prompt> <n_tokens>
 ```
-Example: `cargo run --release --bin sample llama2-7b-chat tokenizer.model "Hello, I am " 10 cpu`
+Example: ```
+#export TORCH_CUDA_VERSION=cu113 # if running on gpu
+cargo run --release --bin sample llama2-7b-chat tokenizer.model "Hello, I am " 10 cpu
+```
 
 ## Note
 

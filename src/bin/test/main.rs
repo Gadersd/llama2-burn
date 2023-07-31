@@ -3,7 +3,7 @@ use llama::token::LlamaTokenizer;
 
 use num_traits::cast::ToPrimitive;
 
-use burn_wgpu::{WgpuBackend, WgpuDevice, AutoGraphicsApi};
+use burn_tch::{TchBackend, TchDevice};
 
 use burn::{
     config::Config, 
@@ -70,12 +70,12 @@ use std::io;
 use std::process;
 
 fn main() {
-    type Backend = WgpuBackend<AutoGraphicsApi, Elem, i32>;
+    type Backend = TchBackend<f32>;
 
      // CPU is used for conversion
      // everyone who converts should be able to perform a simple test without needing a lot of GPU memory
     // so test on CPU
-     let device = WgpuDevice::Cpu;
+    let device = TchDevice::Cpu;
 
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {

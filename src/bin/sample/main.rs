@@ -4,7 +4,7 @@ use llama::token::LlamaTokenizer;
 use num_traits::cast::ToPrimitive;
 use std::error::Error;
 
-use burn_wgpu::{WgpuBackend, WgpuDevice, AutoGraphicsApi};
+use burn_tch::{TchBackend, TchDevice};
 
 use burn::{
     config::Config, 
@@ -82,7 +82,7 @@ use std::io;
 use std::process;
 
 fn main() {
-    type Backend = WgpuBackend<AutoGraphicsApi, Elem, i32>;
+    type Backend = TchBackend<f32>;
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 6 {
@@ -101,11 +101,16 @@ fn main() {
     // Specify device based on command line argument
     let device_param = &args[5];
     let device = if device_param == "cpu" {
-        WgpuDevice::Cpu
-    } else if device_param == "best" {
-        WgpuDevice::BestAvailable
+        TchDevice::Cpu
+    } else if device_param == "gpu" {
+        #[cfg(not(target_os = "macos"))]
+        let device = TchDevice::Cuda(0);
+        #[cfg(target_os = "macos")]
+        let device = TchDevice::Mps;
+
+        device
     } else {
-        eprintln!("Error: Invalid device parameter (must be 'cpu' or 'best')");
+        eprintln!("Error: Invalid device parameter (must be 'cpu' or 'gpu')");
         process::exit(1);
     };
 
