@@ -86,7 +86,8 @@ Example: `cargo run --release --bin test tokenizer.model params`
 ```
 cargo run --bin sample <model_name> <tokenizer_filepath> <prompt> <n_tokens>
 ```
-Example: ```
+Example: 
+```
 #export TORCH_CUDA_VERSION=cu113 # if running on gpu
 cargo run --release --bin sample llama2-7b-chat tokenizer.model "Hello, I am " 10 cpu
 ```
