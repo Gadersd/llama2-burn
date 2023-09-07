@@ -7,52 +7,58 @@ use std::error::Error;
 use burn_tch::{TchBackend, TchDevice};
 
 use burn::{
-    config::Config, 
-    module::Module, 
+    config::Config,
+    module::Module,
     tensor::{
-        self, 
+        self,
         backend::{self, Backend},
-        Data, 
-        Tensor,
-        Int, 
-        Float, 
+        Data, Float, Int, Tensor,
     },
 };
 
-use burn::record::{self, Recorder, BinFileRecorder, HalfPrecisionSettings};
+use burn::record::{self, BinFileRecorder, HalfPrecisionSettings, Recorder};
 
 fn load_llama<B: Backend>(model_name: &str) -> Result<(Llama<B>, LlamaConfig), Box<dyn Error>> {
     let config = LlamaConfig::load(&format!("{model_name}.cfg"))?;
     let llama = load_llama_model_file(&config, model_name)?;
 
-    Ok( (llama, config) )
+    Ok((llama, config))
 }
 
-fn load_llama_model_file<B: Backend>(config: &LlamaConfig, filename: &str) -> Result<Llama<B>, record::RecorderError> {
+fn load_llama_model_file<B: Backend>(
+    config: &LlamaConfig,
+    filename: &str,
+) -> Result<Llama<B>, record::RecorderError> {
     BinFileRecorder::<HalfPrecisionSettings>::new()
-    .load(filename.into())
-    .map(|record| config.init().load_record(record))
+        .load(filename.into())
+        .map(|record| config.init().load_record(record))
 }
 
-fn save_llama_model_file<B: Backend>(llama: Llama<B>, name: &str) -> Result<(), record::RecorderError> {
-    BinFileRecorder::<HalfPrecisionSettings>::new()
-    .record(
-        llama.into_record(),
-        name.into(),
-    )
+fn save_llama_model_file<B: Backend>(
+    llama: Llama<B>,
+    name: &str,
+) -> Result<(), record::RecorderError> {
+    BinFileRecorder::<HalfPrecisionSettings>::new().record(llama.into_record(), name.into())
 }
 
-fn sample_llama<B: Backend>(llama: &Llama<B>, tokenizer: &LlamaTokenizer, prompt: &str, n_tokens: usize) -> String {
+fn sample_llama<B: Backend>(
+    llama: &Llama<B>,
+    tokenizer: &LlamaTokenizer,
+    prompt: &str,
+    n_tokens: usize,
+) -> String {
     let device = llama.devices()[0].clone();
 
     let mut tokens = tokenizer.encode(prompt, true, false);
     let mut text = String::new();
 
     for i in 0..n_tokens {
-        let token_tensor = Tensor::from_ints(
-            Data::from_usize(Data::new(tokens.iter().map(|&t| t as usize).collect(), [tokens.len()].into()))
-        ).unsqueeze::<2>()
-         .to_device(&device);
+        let token_tensor = Tensor::from_ints(Data::from_usize(Data::new(
+            tokens.iter().map(|&t| t as usize).collect(),
+            [tokens.len()].into(),
+        )))
+        .unsqueeze::<2>()
+        .to_device(&device);
 
         let out = llama.forward(token_tensor);
 
@@ -86,7 +92,10 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 6 {
-        eprintln!("Usage: {} <model_name> <tokenizer_filepath> <prompt> <n_tokens> <device>", args[0]);
+        eprintln!(
+            "Usage: {} <model_name> <tokenizer_filepath> <prompt> <n_tokens> <device>",
+            args[0]
+        );
         process::exit(1);
     }
 
@@ -122,7 +131,7 @@ fn main() {
         }
     };
 
-    let (llama, llama_config): (Llama::<Backend>, LlamaConfig) = match load_llama(model_name) {
+    let (llama, llama_config): (Llama<Backend>, LlamaConfig) = match load_llama(model_name) {
         Ok((llama, llama_config)) => (llama, llama_config),
         Err(e) => {
             eprintln!("Failed to load llama model: {:?}", e);

@@ -2,6 +2,7 @@ import torch
 from pathlib import Path
 import json
 import sys
+from safetensors.torch import load_file
 
 import dump
 from model import Transformer, ModelArgs
@@ -9,11 +10,11 @@ import tokenizer
 
 def load_model(model_dir, tokenizer_path):
     tok = tokenizer.Tokenizer(model_path=tokenizer_path)
-    checkpoints = sorted(Path(model_dir).glob("*.pth"))
+    checkpoints = sorted(Path(model_dir).glob("*.safetensors"))
     if len(checkpoints) == 0:
         raise ValueError(f"No checkpoint files found in {model_dir}")
     
-    weights = [torch.load(filename, map_location="cpu") for filename in checkpoints]
+    weights = [load_file(filename, device="cpu") for filename in checkpoints]
     with open(Path(model_dir) / "params.json", "r") as f:
         params = json.loads(f.read())
     

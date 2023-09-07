@@ -6,29 +6,33 @@ use num_traits::cast::ToPrimitive;
 use burn_tch::{TchBackend, TchDevice};
 
 use burn::{
-    config::Config, 
-    module::Module, 
+    config::Config,
+    module::Module,
     tensor::{
-        self, 
+        self,
         backend::{self, Backend},
-        Data, 
-        Tensor,
-        Int, 
-        Float, 
+        Data, Float, Int, Tensor,
     },
 };
 
-fn sample_llama<B: Backend>(llama: &Llama<B>, tokenizer: &LlamaTokenizer, prompt: &str, n_tokens: usize) -> String {
+fn sample_llama<B: Backend>(
+    llama: &Llama<B>,
+    tokenizer: &LlamaTokenizer,
+    prompt: &str,
+    n_tokens: usize,
+) -> String {
     let device = llama.devices()[0].clone();
 
     let mut tokens = tokenizer.encode(prompt, true, false);
     let mut text = String::new();
 
     for i in 0..n_tokens {
-        let token_tensor = Tensor::from_ints(
-            Data::from_usize(Data::new(tokens.iter().map(|&t| t as usize).collect(), [tokens.len()].into()))
-        ).unsqueeze::<2>()
-         .to_device(&device);
+        let token_tensor = Tensor::from_ints(Data::from_usize(Data::new(
+            tokens.iter().map(|&t| t as usize).collect(),
+            [tokens.len()].into(),
+        )))
+        .unsqueeze::<2>()
+        .to_device(&device);
 
         let out = llama.forward(token_tensor);
 
@@ -72,8 +76,8 @@ use std::process;
 fn main() {
     type Backend = TchBackend<f32>;
 
-     // CPU is used for conversion
-     // everyone who converts should be able to perform a simple test without needing a lot of GPU memory
+    // CPU is used for conversion
+    // everyone who converts should be able to perform a simple test without needing a lot of GPU memory
     // so test on CPU
     let device = TchDevice::Cpu;
 
@@ -82,7 +86,7 @@ fn main() {
         eprintln!("Usage: {} <tokenizer_filepath> <dump_path>", args[0]);
         process::exit(1);
     }
-    
+
     let tokenizer_filepath = &args[1];
     let dump_path = &args[2];
 
@@ -96,13 +100,14 @@ fn main() {
 
     test_tokenizer(&tokenizer);
 
-    let (llama, llama_config): (Llama::<Backend>, LlamaConfig) = match load_llama_dump(dump_path, &device) {
-        Ok((llama, llama_config)) => (llama, llama_config),
-        Err(e) => {
-            eprintln!("Failed to load llama dump: {:?}", e);
-            process::exit(1);
-        }
-    };
+    let (llama, llama_config): (Llama<Backend>, LlamaConfig) =
+        match load_llama_dump(dump_path, &device) {
+            Ok((llama, llama_config)) => (llama, llama_config),
+            Err(e) => {
+                eprintln!("Failed to load llama dump: {:?}", e);
+                process::exit(1);
+            }
+        };
 
     let test_prompt = "Hello, I am ";
     let sample = sample_llama(&llama, &tokenizer, test_prompt, 10);

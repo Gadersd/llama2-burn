@@ -7,35 +7,35 @@ use std::error::Error;
 use burn_tch::{TchBackend, TchDevice};
 
 use burn::{
-    config::Config, 
-    module::Module, 
+    config::Config,
+    module::Module,
     tensor::{
-        self, 
+        self,
         backend::{self, Backend},
-        Data, 
-        Tensor,
-        Int, 
-        Float, 
+        Data, Float, Int, Tensor,
     },
 };
 
-use burn::record::{self, Recorder, BinFileRecorder, HalfPrecisionSettings};
+use burn::record::{self, BinFileRecorder, HalfPrecisionSettings, Recorder};
 
-fn convert_llama_dump_to_model<B: Backend>(dump_path: &str, model_name: &str, device: &B::Device) -> Result<(), Box<dyn Error>> {
-    let (llama, llama_config): (Llama::<B>, LlamaConfig) = load_llama_dump(dump_path, device)?;
+fn convert_llama_dump_to_model<B: Backend>(
+    dump_path: &str,
+    model_name: &str,
+    device: &B::Device,
+) -> Result<(), Box<dyn Error>> {
+    let (llama, llama_config): (Llama<B>, LlamaConfig) = load_llama_dump(dump_path, device)?;
 
     save_llama_model_file(llama, model_name)?;
     llama_config.save(&format!("{model_name}.cfg"))?;
 
-    Ok( () )
+    Ok(())
 }
 
-fn save_llama_model_file<B: Backend>(llama: Llama<B>, name: &str) -> Result<(), record::RecorderError> {
-    BinFileRecorder::<HalfPrecisionSettings>::new()
-    .record(
-        llama.into_record(),
-        name.into(),
-    )
+fn save_llama_model_file<B: Backend>(
+    llama: Llama<B>,
+    name: &str,
+) -> Result<(), record::RecorderError> {
+    BinFileRecorder::<HalfPrecisionSettings>::new().record(llama.into_record(), name.into())
 }
 
 fn test_tokenizer() {
