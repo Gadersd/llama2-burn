@@ -10,10 +10,12 @@ import tokenizer
 def load_model(model_dir, tokenizer_path):
     tok = tokenizer.Tokenizer(model_path=tokenizer_path)
     checkpoints = sorted(Path(model_dir).glob("*.pth"))
-    if len(checkpoints) == 0:
-        raise ValueError(f"No checkpoint files found in {model_dir}")
+    if len(checkpoints) > 0:
+        weights = [torch.load(filename, map_location="cpu") for filename in checkpoints]
+        weights = concat_weights(weights)
+    else:
+        weights = torch.load(Path(model_dir) / "consolidated.00.pth")
     
-    weights = [torch.load(filename, map_location="cpu") for filename in checkpoints]
     with open(Path(model_dir) / "params.json", "r") as f:
         params = json.loads(f.read())
     
@@ -23,7 +25,7 @@ def load_model(model_dir, tokenizer_path):
     )
     model_args.vocab_size = tok.n_words
     model = Transformer(model_args)
-    model.load_state_dict(concat_weights(weights), strict=False)
+    model.load_state_dict(weights, strict=False)
     model.max_seq_len = model.tok_embeddings.weight.shape[0]
     print('Loaded model')
 
