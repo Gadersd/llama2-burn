@@ -15,7 +15,6 @@ def load_model(model_dir, tokenizer_path):
         raise ValueError(f"No checkpoint files found in {model_dir}")
     
     weights = [torch.load(filename, map_location="cpu") for filename in checkpoints]
-    print('hello')
     with open(Path(model_dir) / "params.json", "r") as f:
         params = json.loads(f.read())
     
