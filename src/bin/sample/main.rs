@@ -124,10 +124,6 @@ fn main() {
         panic!("Error: Invalid number of repetitions");
     });
 
-    let log_file: String = args[7].parse().unwrap_or_else(|_| {
-        panic!("Error: Invalid log filename.");
-    });
-
     let tokenizer = match LlamaTokenizer::new(tokenizer_filepath) {
         Ok(tokenizer) => tokenizer,
         Err(e) => {
