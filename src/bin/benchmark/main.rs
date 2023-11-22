@@ -62,8 +62,6 @@ fn sample_llama<B: Backend>(
         tokens.push(token_id);
 
         let token_text = tokenizer.decode(&[token_id], true);
-        println!("{token_text}");
-
         text += &token_text;
     }
 
