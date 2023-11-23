@@ -1,0 +1,40 @@
+name: Sync
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  auto-update:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Push Changes
+      run: |
+        git config --global user.email "actions@github.com"
+        git config --global user.name "GitHub Actions"
+        export FEATURE_BRANCH="sync-feature-$(date +'%Y%m%d%H%M%S')"
+        git checkout -b $FEATURE_BRANCH
+        git remote add upstream https://github.com/Gadersd/llama2-burn.git
+        git fetch upstream
+        git merge upstream/main
+
+        if git diff --quiet; then
+          echo "No changes to sync. Exiting."
+          exit 0
+        fi
+
+        git push origin $FEATURE_BRANCH
+        echo "FEATURE_BRANCH=$FEATURE_BRANCH" >> $GITHUB_ENV
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        commit-message: 'Sync with upstream'
+        title: 'Sync with upstream'
+        branch: ${{ env.FEATURE_BRANCH }}
+        base: main
+        labels: auto-update
