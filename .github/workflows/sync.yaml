@@ -27,20 +27,20 @@ jobs:
 
         if git diff --quiet; then
           echo "No changes to sync. Exiting."
-          echo "PUSH_CHANGES=false" >> $GITHUB_OUTPUT
+          echo "PUSH_CHANGES=false" >> $GITHUB_ENV
           exit 0
         fi
 
         git push origin $FEATURE_BRANCH
-        echo "FEATURE_BRANCH=$FEATURE_BRANCH" >> $GITHUB_OUTPUT
-        echo "PUSH_CHANGES=true" >> $GITHUB_OUTPUT
+        echo "FEATURE_BRANCH=$FEATURE_BRANCH" >> $GITHUB_ENV
+        echo "PUSH_CHANGES=true" >> $GITHUB_ENV
 
     - name: Create Pull Request
       uses: peter-evans/create-pull-request@v5
-      if: steps.push_changes.outputs.PUSH_CHANGES == 'true'
+      if: env.PUSH_CHANGES == 'true'
       with:
         commit-message: 'Sync with upstream'
         title: 'Sync with upstream'
-        branch: ${{ steps.push_changes.outputs.FEATURE_BRANCH }}
+        branch:  ${{ env.FEATURE_BRANCH }}
         base: main
         labels: auto-update
