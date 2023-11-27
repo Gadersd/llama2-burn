@@ -41,6 +41,6 @@ jobs:
       with:
         commit-message: 'Sync with upstream'
         title: 'Sync with upstream'
-        branch:  ${{ env.FEATURE_BRANCH }}
+        branch: ${{ env.FEATURE_BRANCH }}
         base: main
         labels: auto-update
