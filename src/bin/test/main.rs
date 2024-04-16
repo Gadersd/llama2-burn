@@ -3,7 +3,7 @@ use llama::token::LlamaTokenizer;
 
 use num_traits::cast::ToPrimitive;
 
-use burn_tch::{TchBackend, TchDevice};
+use burn_tch::{LibTorch, LibTorchDevice};
 
 use burn::{
     config::Config,
@@ -30,9 +30,8 @@ fn sample_llama<B: Backend>(
         let token_tensor = Tensor::from_ints(Data::from_usize(Data::new(
             tokens.iter().map(|&t| t as usize).collect(),
             [tokens.len()].into(),
-        )))
-        .unsqueeze::<2>()
-        .to_device(&device);
+        )), &device)
+        .unsqueeze::<2>();
 
         let out = llama.forward(token_tensor);
 
@@ -74,12 +73,12 @@ use std::io;
 use std::process;
 
 fn main() {
-    type Backend = TchBackend<f32>;
+    type Backend = LibTorch<f32>;
 
     // CPU is used for conversion
     // everyone who converts should be able to perform a simple test without needing a lot of GPU memory
     // so test on CPU
-    let device = TchDevice::Cpu;
+    let device = LibTorchDevice::Cpu;
 
     let args: Vec<String> = env::args().collect();
     if args.len() != 3 {

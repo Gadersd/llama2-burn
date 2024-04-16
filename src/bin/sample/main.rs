@@ -4,7 +4,7 @@ use llama::token::LlamaTokenizer;
 use num_traits::cast::ToPrimitive;
 use std::error::Error;
 
-use burn_tch::{TchBackend, TchDevice};
+use burn_tch::{LibTorch, LibTorchDevice};
 
 use burn::{
     config::Config,
@@ -18,9 +18,9 @@ use burn::{
 
 use burn::record::{self, BinFileRecorder, HalfPrecisionSettings, Recorder};
 
-fn load_llama<B: Backend>(model_name: &str) -> Result<(Llama<B>, LlamaConfig), Box<dyn Error>> {
+fn load_llama<B: Backend>(model_name: &str, device: &B::Device) -> Result<(Llama<B>, LlamaConfig), Box<dyn Error>> {
     let config = LlamaConfig::load(&format!("{model_name}.cfg"))?;
-    let llama = load_llama_model_file(&config, model_name)?;
+    let llama = load_llama_model_file(&config, model_name, device)?;
 
     Ok((llama, config))
 }
@@ -28,10 +28,11 @@ fn load_llama<B: Backend>(model_name: &str) -> Result<(Llama<B>, LlamaConfig), B
 fn load_llama_model_file<B: Backend>(
     config: &LlamaConfig,
     filename: &str,
+    device: &B::Device
 ) -> Result<Llama<B>, record::RecorderError> {
     BinFileRecorder::<HalfPrecisionSettings>::new()
-        .load(filename.into())
-        .map(|record| config.init().load_record(record))
+        .load(filename.into(), device)
+        .map(|record| config.init(device).load_record(record))
 }
 
 fn save_llama_model_file<B: Backend>(
@@ -56,9 +57,8 @@ fn sample_llama<B: Backend>(
         let token_tensor = Tensor::from_ints(Data::from_usize(Data::new(
             tokens.iter().map(|&t| t as usize).collect(),
             [tokens.len()].into(),
-        )))
-        .unsqueeze::<2>()
-        .to_device(&device);
+        )), &device)
+        .unsqueeze::<2>();
 
         let out = llama.forward(token_tensor);
 
@@ -88,7 +88,7 @@ use std::io;
 use std::process;
 
 fn main() {
-    type Backend = TchBackend<f32>;
+    type Backend = LibTorch<f32>;
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 6 {
@@ -110,12 +110,12 @@ fn main() {
     // Specify device based on command line argument
     let device_param = &args[5];
     let device = if device_param == "cpu" {
-        TchDevice::Cpu
+        LibTorchDevice::Cpu
     } else if device_param == "gpu" {
         #[cfg(not(target_os = "macos"))]
-        let device = TchDevice::Cuda(0);
+        let device = LibTorchDevice::Cuda(0);
         #[cfg(target_os = "macos")]
-        let device = TchDevice::Mps;
+        let device = LibTorchDevice::Mps;
 
         device
     } else {
@@ -131,7 +131,7 @@ fn main() {
         }
     };
 
-    let (llama, llama_config): (Llama<Backend>, LlamaConfig) = match load_llama(model_name) {
+    let (llama, llama_config): (Llama<Backend>, LlamaConfig) = match load_llama(model_name, &device) {
         Ok((llama, llama_config)) => (llama, llama_config),
         Err(e) => {
             eprintln!("Failed to load llama model: {:?}", e);

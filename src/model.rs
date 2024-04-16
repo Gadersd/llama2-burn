@@ -1,21 +1,16 @@
 use std::f32::NEG_INFINITY;
 
+use burn::prelude::*;
 use burn::{
-    config::Config,
-    module::{Module, Param},
-    nn,
-    tensor::{
-        activation::{sigmoid, softmax},
-        backend::Backend,
-        module::embedding,
-        Data, Distribution, Int, Tensor,
-    },
+    module::Param, 
+    tensor::backend::AutodiffBackend, 
+    tensor::activation::{sigmoid, softmax, log_softmax}
 };
 
 #[derive(Config, Debug)]
 pub struct LlamaConfig {
     n_vocab: usize,
-    n_ctx: usize,
+    pub n_ctx: usize,
     n_state: usize,
     multiple_of: usize,
     ffn_dim_multiplier: Option<usize>,
@@ -27,10 +22,10 @@ pub struct LlamaConfig {
 }
 
 impl LlamaConfig {
-    pub fn init<B: Backend>(&self) -> Llama<B> {
-        let token_embedding = nn::EmbeddingConfig::new(self.n_vocab, self.n_state).init();
+    pub fn init<B: Backend>(&self, device: &B::Device) -> Llama<B> {
+        let token_embedding = nn::EmbeddingConfig::new(self.n_vocab, self.n_state).init(device);
         let rotary_encoder =
-            RotaryEncodingConfig::new(self.n_ctx, self.n_state / self.n_head, 10000.0).init();
+            RotaryEncodingConfig::new(self.n_ctx, self.n_state / self.n_head, 10000.0).init(device);
         let blocks: Vec<_> = (0..self.n_layer)
             .into_iter()
             .map(|_| {
@@ -42,16 +37,16 @@ impl LlamaConfig {
                     self.norm_eps,
                 )
                 .with_ffn_dim_multiplier(self.ffn_dim_multiplier)
-                .init()
+                .init(device)
             })
             .collect();
 
-        let norm = RMSNormConfig::new(self.n_state, self.norm_eps).init();
+        let norm = RMSNormConfig::new(self.n_state, self.norm_eps).init(device);
         let output = nn::LinearConfig::new(self.n_state, self.n_vocab)
             .with_bias(false)
-            .init();
+            .init(device);
 
-        let mask = attn_decoder_mask(self.n_ctx).into();
+        let mask = attn_decoder_mask(self.n_ctx, device);
 
         let n_vocab = self.n_vocab;
         let n_ctx = self.n_ctx;
@@ -76,7 +71,7 @@ pub struct Llama<B: Backend> {
     blocks: Vec<ResidualDecoderAttentionBlock<B>>,
     norm: RMSNorm<B>,
     output: nn::Linear<B>,
-    mask: Param<Tensor<B, 2>>,
+    mask: Tensor<B, 2>,
     n_vocab: usize,
     n_ctx: usize,
 }
@@ -94,10 +89,7 @@ impl<B: Backend> Llama<B> {
 
         let x = self.token_embedding.forward(x);
 
-        let mut x = x;
-        for block in &self.blocks {
-            x = block.forward(x, &self.rotary_encoder, self.mask.val());
-        }
+        let x = self.blocks.iter().fold(x, |acc, block| block.forward(acc, &self.rotary_encoder, self.mask.clone()));
 
         self.output.forward(self.norm.forward(x))
     }
@@ -114,15 +106,15 @@ pub struct ResidualDecoderAttentionBlockConfig {
 }
 
 impl ResidualDecoderAttentionBlockConfig {
-    fn init<B: Backend>(&self) -> ResidualDecoderAttentionBlock<B> {
+    fn init<B: Backend>(&self, device: &B::Device) -> ResidualDecoderAttentionBlock<B> {
         let attn =
-            MultiHeadSelfAttentionConfig::new(self.n_state, self.n_head, self.n_kv_head).init();
-        let attn_norm = RMSNormConfig::new(self.n_state, self.norm_eps).init();
+            MultiHeadSelfAttentionConfig::new(self.n_state, self.n_head, self.n_kv_head).init(device);
+        let attn_norm = RMSNormConfig::new(self.n_state, self.norm_eps).init(device);
 
         let mlp = MLPConfig::new(self.n_state, 4 * self.n_state, self.multiple_of)
             .with_ffn_dim_multiplier(self.ffn_dim_multiplier)
-            .init();
-        let mlp_norm = RMSNormConfig::new(self.n_state, self.norm_eps).init();
+            .init(device);
+        let mlp_norm = RMSNormConfig::new(self.n_state, self.norm_eps).init(device);
 
         ResidualDecoderAttentionBlock {
             attn,
@@ -166,7 +158,7 @@ pub struct MLPConfig {
 }
 
 impl MLPConfig {
-    fn init<B: Backend>(&self) -> MLP<B> {
+    fn init<B: Backend>(&self, device: &B::Device) -> MLP<B> {
         let mut hidden_dim = 2 * self.n_state_hidden / 3;
         if let Some(ffn_dim_multiplier) = self.ffn_dim_multiplier {
             hidden_dim = ffn_dim_multiplier * hidden_dim;
@@ -175,13 +167,13 @@ impl MLPConfig {
 
         let w1 = nn::LinearConfig::new(self.n_state, hidden_dim)
             .with_bias(false)
-            .init();
+            .init(device);
         let w2 = nn::LinearConfig::new(hidden_dim, self.n_state)
             .with_bias(false)
-            .init();
+            .init(device);
         let w3 = nn::LinearConfig::new(self.n_state, hidden_dim)
             .with_bias(false)
-            .init();
+            .init(device);
 
         let silu = SILU::new();
 
@@ -212,7 +204,7 @@ pub struct MultiHeadSelfAttentionConfig {
 }
 
 impl MultiHeadSelfAttentionConfig {
-    fn init<B: Backend>(&self) -> MultiHeadSelfAttention<B> {
+    fn init<B: Backend>(&self, device: &B::Device) -> MultiHeadSelfAttention<B> {
         assert!(
             self.n_state % self.n_head == 0,
             "State size {} must be a multiple of the number of heads {}",
@@ -232,16 +224,16 @@ impl MultiHeadSelfAttentionConfig {
         let n_kv_head = self.n_kv_head;
         let query = nn::LinearConfig::new(self.n_state, self.n_state)
             .with_bias(false)
-            .init();
+            .init(device);
         let key = nn::LinearConfig::new(self.n_state, n_kv_head * n_head_dim)
             .with_bias(false)
-            .init();
+            .init(device);
         let value = nn::LinearConfig::new(self.n_state, n_kv_head * n_head_dim)
             .with_bias(false)
-            .init();
+            .init(device);
         let out = nn::LinearConfig::new(self.n_state, self.n_state)
             .with_bias(false)
-            .init();
+            .init(device);
 
         MultiHeadSelfAttention {
             n_head,
@@ -338,40 +330,43 @@ fn repeat_kv<B: Backend>(x: Tensor<B, 4>, n_repeat: usize) -> Tensor<B, 4> {
 
 /// Generates a strictly upper triangular matrix filled with -inf that when added to an attention weight matrix prevents
 /// vectors from attending to other vectors further in the sequence, preventing future information from flowing into the past
-pub fn attn_decoder_mask<B: Backend>(seq_length: usize) -> Tensor<B, 2> {
+pub fn attn_decoder_mask<B: Backend>(seq_length: usize, device: &B::Device) -> Tensor<B, 2> {
+    Tensor::full([seq_length, seq_length], NEG_INFINITY, device).triu(1)
+}
+/*pub fn attn_decoder_mask<B: Backend>(seq_length: usize) -> Tensor<B, 2> {
     let mut mask = Tensor::<B, 2>::zeros([seq_length, seq_length]);
 
     for i in 0..(seq_length - 1) {
-        let values = Tensor::<B, 2>::zeros([1, seq_length - (i + 1)]).add_scalar(NEG_INFINITY);
+        let values = Tensor::<B, 2>::zeros([1, seq_length - (i + 1)], device).add_scalar(NEG_INFINITY);
         mask = mask.slice_assign([i..i + 1, i + 1..seq_length], values);
     }
 
     return mask;
-}
+}*/
 
 #[derive(Config, Debug)]
 pub struct RotaryEncodingConfig {
-    max_sequence_length: usize,
-    state_size: usize,
-    theta: f64,
+    pub max_sequence_length: usize,
+    pub state_size: usize,
+    pub theta: f64,
 }
 
 impl RotaryEncodingConfig {
-    pub fn init<B: Backend>(&self) -> RotaryEncoding<B> {
+    pub fn init<B: Backend>(&self, device: &B::Device) -> RotaryEncoding<B> {
         assert!(self.state_size % 2 == 0, "Head dims must be even.");
         assert!(self.theta > 0.0, "Theta must be positive.");
 
         let half_state_size = self.state_size / 2;
 
-        let arange_m = Tensor::from_floats([[1.0, 0.0, 0.0, 1.0], [0.0, -1.0, 1.0, 0.0]]).into();
+        let arange_m = Tensor::from_floats([[1.0, 0.0, 0.0, 1.0], [0.0, -1.0, 1.0, 0.0]], device);
 
         let inv_freq = powto(
             self.theta,
-            Tensor::arange(0..half_state_size).float() * (2.0 / self.state_size as f64),
+            Tensor::arange(0..half_state_size as i64, device).float() * (2.0 / self.state_size as f64),
         )
-        .powf(-1.0);
+        .powf_scalar(-1.0);
 
-        let periods = Tensor::arange(0..self.max_sequence_length)
+        let periods = Tensor::arange(0..self.max_sequence_length as i64, device)
             .float()
             .unsqueeze::<2>()
             .transpose()
@@ -384,8 +379,7 @@ impl RotaryEncodingConfig {
             .reshape([self.max_sequence_length, 2, half_state_size])
             .transpose()
             .repeat(2, 2)
-            .reshape([self.max_sequence_length, self.state_size, 2])
-            .into();
+            .reshape([self.max_sequence_length, self.state_size, 2]);
 
         RotaryEncoding { arange_m, freq_cis }
     }
@@ -402,13 +396,13 @@ fn powto<B: Backend, const D: usize>(base: f64, x: Tensor<B, D>) -> Tensor<B, D>
 /// which potentially allows for arbitrarily long sequences without retraining.
 #[derive(Module, Debug)]
 pub struct RotaryEncoding<B: Backend> {
-    arange_m: Param<Tensor<B, 2>>,
-    freq_cis: Param<Tensor<B, 3>>,
+    arange_m: Tensor<B, 2>,
+    freq_cis: Tensor<B, 3>,
 }
 
 impl<B: Backend> RotaryEncoding<B> {
     /// Applies rotary positional encoding to a tensor of dimenions (..., seq_len, n_state)
-    fn forward<const D: usize>(&self, x: Tensor<B, D>) -> Tensor<B, D> {
+    pub fn forward<const D: usize>(&self, x: Tensor<B, D>) -> Tensor<B, D> {
         assert!(D >= 2);
         let orig_shape = x.shape();
         let (n_ctx, n_state) = (orig_shape.dims[D - 2], orig_shape.dims[D - 1]);
@@ -416,9 +410,9 @@ impl<B: Backend> RotaryEncoding<B> {
 
         let out = x
             .reshape([dummy_dim_size, n_ctx, n_state / 2, 2])
-            .matmul(self.arange_m.val().unsqueeze())
+            .matmul(self.arange_m.clone().unsqueeze())
             .reshape([dummy_dim_size, n_ctx, n_state, 2])
-            * self.freq_cis.val().slice([0..n_ctx]).unsqueeze();
+            * self.freq_cis.clone().slice([0..n_ctx]).unsqueeze();
 
         out.sum_dim(D - 1).reshape(orig_shape)
     }
@@ -431,10 +425,10 @@ pub struct RMSNormConfig {
 }
 
 impl RMSNormConfig {
-    fn init<B: Backend>(&self) -> RMSNorm<B> {
+    fn init<B: Backend>(&self, device: &B::Device) -> RMSNorm<B> {
         assert!(self.eps > 0.0, "eps must be positive.");
 
-        let weight = Tensor::ones([self.layer_size]);
+        let weight = Param::from_tensor(Tensor::ones([self.layer_size], device));
         let eps = self.eps;
 
         RMSNorm { weight, eps }
@@ -443,14 +437,16 @@ impl RMSNormConfig {
 
 #[derive(Module, Debug)]
 pub struct RMSNorm<B: Backend> {
-    weight: Tensor<B, 1>,
+    weight: Param<Tensor<B, 1>>,
     eps: f64,
 }
 
 impl<B: Backend> RMSNorm<B> {
     fn forward<const D: usize>(&self, x: Tensor<B, D>) -> Tensor<B, D> {
-        let rms = (x.clone().powf(2.0).mean_dim(D - 1) + self.eps).sqrt();
-        (x / rms) * self.weight.clone().unsqueeze()
+        let rms = (x.clone().powf_scalar(2.0).mean_dim(D - 1) + self.eps).sqrt();
+        let x = x / rms;
+
+        x * self.weight.val().unsqueeze()
     }
 }
 
@@ -466,6 +462,7 @@ impl SILU {
         x.clone() * sigmoid(x)
     }
 }
+
 
 use npy::{self, NpyData};
 use num_traits::cast::ToPrimitive;
@@ -483,7 +480,7 @@ fn numpy_to_tensor<B: Backend, const D: usize>(
     let shape: Vec<_> = v[0..D].into_iter().map(|&v| v as usize).collect();
     let data: Vec<B::FloatElem> = v[D..].into_iter().map(|e| e.elem()).collect();
 
-    Tensor::from_data_device(Data::new(data, shape.into()), device)
+    Tensor::from_data(Data::new(data, shape.into()), device)
 }
 
 fn load_tensor<B: Backend, const D: usize>(
@@ -521,15 +518,14 @@ fn load_linear<B: Backend>(
     path: &str,
     device: &B::Device,
 ) -> Result<nn::Linear<B>, Box<dyn Error>> {
-    let weight = load_tensor::<B, 2>("weight", path, device)?;
-    let bias = load_tensor::<B, 1>("bias", path, device).ok();
+    let weight = Param::from_tensor(load_tensor::<B, 2>("weight", path, device)?);
+    let bias = load_tensor::<B, 1>("bias", path, device).ok().map(Param::from_tensor);
 
-    let record = nn::LinearRecord {
-        weight: weight.into(),
-        bias: bias.map(|t| t.into()),
+    let linear: nn::Linear<B> = nn::Linear {
+        weight: weight, 
+        bias: bias, 
     };
 
-    let linear: nn::Linear<B> = nn::LinearConfig::new(3, 3).init_with(record);
     Ok(linear)
 }
 
@@ -538,7 +534,7 @@ fn load_rmsnorm<B: Backend>(path: &str, device: &B::Device) -> Result<RMSNorm<B>
     let eps = load_f32::<B>("eps", path, device)?.into();
 
     let rmsnorm = RMSNorm {
-        weight: weight.into(),
+        weight: Param::from_tensor(weight),
         eps: eps,
     };
 
@@ -603,7 +599,7 @@ fn load_transformer_block<B: Backend>(
     Ok(block)
 }
 
-use burn::nn::{EmbeddingConfig, EmbeddingRecord};
+use burn::nn::Embedding;
 
 pub fn load_llama_dump<B: Backend>(
     path: &str,
@@ -627,14 +623,14 @@ pub fn load_llama_dump<B: Backend>(
     let n_kv_head = blocks[0].attn.n_kv_head;
     let head_dim = n_state / n_head;
 
-    let token_embedding = EmbeddingConfig::new(n_vocab, n_state).init_with(EmbeddingRecord {
-        weight: token_embedding.into(),
-    });
-    let rotary_encoding = RotaryEncodingConfig::new(n_ctx, head_dim, theta.into()).init();
+    let token_embedding = Embedding {
+        weight: Param::from_tensor(token_embedding), 
+    };
+    let rotary_encoding = RotaryEncodingConfig::new(n_ctx, head_dim, theta.into()).init(device);
 
     let norm = load_rmsnorm(&format!("{}/{}", path, "norm"), device)?;
     let output = load_linear(&format!("{}/{}", path, "output"), device)?;
-    let mask = attn_decoder_mask(n_ctx).into();
+    let mask = attn_decoder_mask(n_ctx, device);
 
     let norm_eps = norm.eps;
 
@@ -663,3 +659,4 @@ pub fn load_llama_dump<B: Backend>(
 
     Ok((llama, llama_config))
 }
+
